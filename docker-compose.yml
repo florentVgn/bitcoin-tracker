@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_USER: adonisuser
+      POSTGRES_PASSWORD: adonispassword
+      POSTGRES_DB: adonisdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  # Autres services (ex. backend AdonisJS) peuvent être ajoutés ici
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  backend:
+    driver: bridge
