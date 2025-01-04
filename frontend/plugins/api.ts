@@ -1,4 +1,4 @@
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(() => {
   const api = $fetch.create({
     baseURL: 'http://localhost:3333',
   })

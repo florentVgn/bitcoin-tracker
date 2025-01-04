@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { apiFetch } from '~/composables/apiFetch';
-
 const address = defineModel<string>('test');
 const { $api } = useNuxtApp()
 
