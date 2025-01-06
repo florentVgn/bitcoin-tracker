@@ -1,30 +1,35 @@
 <script setup lang="ts">
-const address = defineModel<string>('test');
+import { useToast } from '#imports';
+
 const { $api } = useNuxtApp();
+const addresses = defineModel();
 const toast = useToast();
 
-const createAddress = async () => {
-  console.log(address.value);
-  await $api('/wallets', {
-    method: 'POST',
-    body: {
-      address: address.value
-    }
-  });
+async function fetchAddresses() {
+  try {
+    const response = await $api('/addresses/', {
+      method: 'GET'
+    }) as { addresses: any[] };
+    addresses.value = response.addresses.map((address) => ({
+      hash: address.hash,
+      createdAt: new Date(address.createdAt).toLocaleString()
+    }));
+  } catch (error) {
+    toast.add({ title: 'Error fetching addresses', color: 'red' });
+  }
+}
 
-};
-
+onMounted(async () => {
+  await fetchAddresses();
+});
 </script>
 
-
 <template>
-  <UContainer class="flex flex-col gap-4">
-    <UInput v-model="address" />
-    <UButton @click="createAddress()">Send</UButton>
+  <UContainer class="flex flex-col gap-4 py-10">
+    <NewAddressForm @addressAdded="fetchAddresses"></NewAddressForm>
 
     <h2>Addresses list</h2>
-    <AddressesTable>
-    </AddressesTable>
+    <AddressesTable :addresses="addresses"></AddressesTable>
   </UContainer>
   <UNotifications />
 </template>

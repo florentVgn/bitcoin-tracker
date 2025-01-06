@@ -1,4 +1,5 @@
 import Address, { AddressUuid } from '#models/address'
+import AddressAlreadyExistsException from '#exceptions/address_already_exists_exception'
 
 type AddressData = { n_tx: number }
 export type BlockchainInfoTransaction = {
@@ -21,12 +22,15 @@ export class AddressesService {
     return Address.all()
   }
 
-  async create(payload: Pick<Address, 'hash'>): Promise<AddressUuid> {
-    const wallet = new Address()
-    wallet.hash = payload.hash
-    this.sync(payload).then()
-    // await wallet.save()
-    return wallet.id
+  async create({ hash }: Pick<Address, 'hash'>): Promise<AddressUuid> {
+    const existingAddress = await Address.findBy('hash', hash)
+    if (existingAddress) {
+      throw new AddressAlreadyExistsException()
+    }
+    const address = new Address()
+    address.hash = hash
+    await address.save()
+    return address.id
   }
 
   async sync(payload: Pick<Address, 'hash'>): Promise<unknown> {

@@ -3,13 +3,15 @@
 import { HttpContext } from '@adonisjs/core/http'
 import { inject } from '@adonisjs/core'
 import { AddressesService } from '#services/addresses_service'
+import { createAddressValidator } from '#validators/address'
 
 @inject()
 export default class AddressesController {
   constructor(private addressesService: AddressesService) {}
+
   async store({ request, response }: HttpContext) {
-    const address = request.only(['hash'])
-    const id = await this.addressesService.create(address)
+    const payload = await request.validateUsing(createAddressValidator)
+    const id = await this.addressesService.create(payload)
     response.send({ id })
   }
 
