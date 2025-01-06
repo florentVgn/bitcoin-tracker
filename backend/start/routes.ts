@@ -8,8 +8,7 @@
 */
 
 import router from '@adonisjs/core/services/router'
-const WalletsController = () => import('#controllers/wallets_controller')
+const AddressesController = () => import('#controllers/addresses_controller')
 
-router.post('/wallets', [WalletsController, 'store'])
-router.get('/wallets', () => 'Hello World')
-router.get('/', () => 'Hello World')
+router.get('/addresses', [AddressesController, 'index'])
+router.post('/addresses', [AddressesController, 'store'])
