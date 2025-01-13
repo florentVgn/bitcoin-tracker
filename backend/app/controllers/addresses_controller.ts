@@ -3,7 +3,7 @@
 import { HttpContext } from '@adonisjs/core/http'
 import { inject } from '@adonisjs/core'
 import { AddressesService } from '#services/addresses_service'
-import { createAddressValidator } from '#validators/address'
+import { createAddressValidator, syncAddressValidator } from '#validators/address'
 
 @inject()
 export default class AddressesController {
@@ -18,5 +18,11 @@ export default class AddressesController {
   async index({ response }: HttpContext): Promise<void> {
     const addresses = await this.addressesService.getAll()
     response.send({ addresses })
+  }
+
+  async sync({ request, response }: HttpContext): Promise<void> {
+    const payload = await request.validateUsing(syncAddressValidator)
+    await this.addressesService.sync({ id: payload.params.id })
+    response.send({ message: 'Synchronization completed successfully' })
   }
 }

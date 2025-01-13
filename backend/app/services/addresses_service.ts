@@ -1,5 +1,7 @@
 import Address, { AddressUuid } from '#models/address'
 import AddressAlreadyExistsException from '#exceptions/address_already_exists_exception'
+import Transaction from '#models/transaction'
+import { DateTime } from 'luxon'
 
 type AddressData = { n_tx: number }
 export type BlockchainInfoTransaction = {
@@ -9,13 +11,7 @@ export type BlockchainInfoTransaction = {
   result: number
 }
 
-export type Transaction = {
-  hash: string
-  fee: number
-  time: number
-  amount: number
-  unitPrice: number | null
-}
+type SynchronizedTransaction = Pick<Transaction, 'hash' | 'fee' | 'time' | 'amount'>
 
 export class AddressesService {
   async getAll(): Promise<Address[]> {
@@ -33,48 +29,37 @@ export class AddressesService {
     return address.id
   }
 
-  async sync(payload: Pick<Address, 'hash'>): Promise<unknown> {
+  async sync(payload: Pick<Address, 'id'>): Promise<void> {
     try {
-      const transactions = await this.fetchTransactionsByAddress(payload)
-      const transactionsWithUnitPrice = this.fetchTransactionsUnitPrices(transactions)
-      console.log(transactionsWithUnitPrice)
-      return transactionsWithUnitPrice
+      const address = await Address.findOrFail(payload.id)
+      const transactions = await this.fetchTransactionsByAddress(address)
+      console.log(transactions)
+      await Transaction.createMany(transactions)
     } catch (error) {
       console.log(error)
     }
   }
 
-  private fetchTransactionsUnitPrices(transactions: Transaction[]) {
-    return transactions.map((transaction) => {
-      return {
-        ...transaction,
-        unitPrice: 0,
-      }
-    })
-  }
-
-  private async fetchTransactionsByAddress({
-    hash,
-  }: Pick<Address, 'hash'>): Promise<Transaction[]> {
-    const response = await fetch(`https://blockchain.info/rawaddr/${hash}`)
-    if (!response.ok) {
-      console.log('Something went wrong')
-      return []
-    }
-    const requests = await this.buildRequests(response, hash)
+  private async fetchTransactionsByAddress(address: Address): Promise<SynchronizedTransaction[]> {
+    const response = await fetch(`https://blockchain.info/rawaddr/${address.hash}`)
+    const requests = await this.buildRequests(response, address.hash)
     const responses = await Promise.all(requests)
     let rawTransactions = await this.extractRawTransactionsFromResponses(responses)
-    return this.formatRawTransactions(rawTransactions)
+    return this.formatRawTransactions(rawTransactions, address)
   }
 
-  private formatRawTransactions(rawTransactions: BlockchainInfoTransaction[]): Transaction[] {
+  private formatRawTransactions(
+    rawTransactions: BlockchainInfoTransaction[],
+    address: Address
+  ): (SynchronizedTransaction & { address_id: AddressUuid })[] {
     return rawTransactions.map((transaction) => {
+      const transactionDateTime = DateTime.fromMillis(transaction.time * 1000)
       return {
         hash: transaction.hash,
         fee: transaction.fee,
-        time: transaction.time,
+        time: transactionDateTime,
         amount: transaction.result,
-        unitPrice: null,
+        address_id: address.id,
       }
     })
   }
@@ -84,7 +69,7 @@ export class AddressesService {
     const numberOfChunks = Math.ceil(numberOfTransactions / 100)
     const promises = []
     console.log({ numberOfChunks, numberOfTransactions })
-    for (let i = 0; i < numberOfChunks; i++) {
+    for (let i = 0; i < numberOfChunks && i < 3; i++) {
       const promise = fetch(
         `https://blockchain.info/rawaddr/${address}?limit=100&offset=${i * 100}`
       )
