@@ -8,7 +8,7 @@ export default class extends BaseSchema {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.uuid('address_id').references('id').inTable('addresses').notNullable()
       table.string('hash').unique().notNullable()
-      table.integer('amount').notNullable()
+      table.bigInteger('amount').notNullable()
       table.integer('fee').notNullable()
       table.datetime('time').notNullable()
 
