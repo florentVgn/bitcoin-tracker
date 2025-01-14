@@ -2,13 +2,7 @@ import Address, { AddressUuid } from '#models/address'
 import AddressAlreadyExistsException from '#exceptions/address_already_exists_exception'
 import Transaction from '#models/transaction'
 import { DateTime } from 'luxon'
-
-export type BlockchainInfoTransaction = {
-  hash: string
-  fee: number
-  time: number
-  result: number
-}
+import logger from '@adonisjs/core/services/logger'
 
 type SynchronizedTransaction = Pick<Transaction, 'hash' | 'fee' | 'time' | 'amount'>
 
@@ -31,7 +25,6 @@ export class AddressesService {
   async sync(payload: Pick<Address, 'id'>): Promise<void> {
     const address = await Address.findOrFail(payload.id)
     const transactions = await this.fetchAddressTransactions(address)
-    console.log(transactions)
     await Transaction.createMany(transactions)
   }
 
@@ -40,28 +33,41 @@ export class AddressesService {
       .where('address_id', address.id)
       .orderBy('time', 'desc')
       .first()
-    const maxChunks = 2 // To avoid rate limit
-    let chunkIndex = 0
-    const transactions = []
-    while (chunkIndex < maxChunks) {
-      const transactionsChunk = await fetch(
-        `https://blockchain.info/rawaddr/${address.hash}?limit=100&offset=${chunkIndex * 100}`
-      )
-      if (!transactionsChunk.ok) {
-        throw new Error(
-          `Error fetching transactions: chunkId=${chunkIndex}, ${transactionsChunk.statusText}`
-        )
-      }
-      const json = (await transactionsChunk.json()) as { txs: BlockchainInfoTransaction[] }
-      const rawTransactions = json.txs
-      for (const transaction of rawTransactions) {
-        if (lastTransaction && transaction.hash === lastTransaction.hash) {
-          break
-        }
-        transactions.push(this.formatRawTransaction(transaction, address))
-      }
-      chunkIndex++
+    const transactionsFromApi = await fetch(
+      `https://api.blockcypher.com/v1/btc/main/addrs/${address.hash}/full`
+    )
+    if (!transactionsFromApi.ok) {
+      throw new Error(`Error fetching transactions: ${transactionsFromApi.statusText}`)
     }
+    const json = (await transactionsFromApi.json()) as { txs: any[] }
+    const rawTransactions = json.txs
+    // logger.info({ rawTransactions })
+    const transactions: SynchronizedTransaction[] = []
+    console.log(rawTransactions.length)
+    for (const transaction of rawTransactions) {
+      let sent = 0
+      let received = 0
+
+      // Check inputs, ie sent tokens
+      transaction.inputs.forEach((input) => {
+        if (input.addresses.includes(address.hash)) {
+          sent += input.value
+        }
+      })
+
+      // Check outputs, ie received tokens
+      transaction.outputs.forEach((output) => {
+        if (output.addresses.includes(address.hash)) {
+          received += output.value
+        }
+      })
+
+      if (lastTransaction && transaction.hash === lastTransaction.hash) {
+        break
+      }
+      transactions.push(this.formatRawTransaction(transaction, address))
+    }
+    logger.info(`Fetched ${transactions.length} transactions from ${address.hash}`)
     return transactions
   }
 
