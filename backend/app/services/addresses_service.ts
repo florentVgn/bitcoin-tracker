@@ -43,21 +43,20 @@ export class AddressesService {
     const rawTransactions = json.txs
     // logger.info({ rawTransactions })
     const transactions: SynchronizedTransaction[] = []
-    console.log(rawTransactions.length)
     for (const transaction of rawTransactions) {
       let sent = 0
       let received = 0
 
       // Check inputs, ie sent tokens
       transaction.inputs.forEach((input) => {
-        if (input.addresses.includes(address.hash)) {
-          sent += input.value
+        if (input.addresses?.includes(address.hash)) {
+          sent += input.output_value
         }
       })
 
       // Check outputs, ie received tokens
       transaction.outputs.forEach((output) => {
-        if (output.addresses.includes(address.hash)) {
+        if (output.addresses?.includes(address.hash)) {
           received += output.value
         }
       })
@@ -65,22 +64,23 @@ export class AddressesService {
       if (lastTransaction && transaction.hash === lastTransaction.hash) {
         break
       }
-      transactions.push(this.formatRawTransaction(transaction, address))
+      const amount = received - sent
+      transactions.push(this.formatRawTransaction({ ...transaction, amount }, address))
     }
     logger.info(`Fetched ${transactions.length} transactions from ${address.hash}`)
     return transactions
   }
 
   private formatRawTransaction(
-    transaction: BlockchainInfoTransaction,
+    transaction: { hash: string; fees: number; confirmed: string; amount: number },
     address: Address
   ): SynchronizedTransaction & { address_id: AddressUuid } {
-    const transactionDateTime = DateTime.fromMillis(transaction.time * 1000)
+    const transactionDateTime = DateTime.fromISO(transaction.confirmed)
     return {
       hash: transaction.hash,
-      fee: transaction.fee,
+      fee: transaction.fees,
       time: transactionDateTime,
-      amount: transaction.result,
+      amount: transaction.amount,
       address_id: address.id,
     }
   }
