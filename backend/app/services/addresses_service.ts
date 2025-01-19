@@ -1,12 +1,16 @@
 import Address, { AddressUuid } from '#models/address'
 import AddressAlreadyExistsException from '#exceptions/address_already_exists_exception'
-import Transaction from '#models/transaction'
+import Transaction, { TransactionInsertDTO } from '#models/transaction'
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
+import { BlockCypherService } from '#services/block_cypher/block_cypher_service'
+import { inject } from '@adonisjs/core'
+import { BlockCypherTransaction } from '#services/block_cypher/block_cypher_model'
 
-type SynchronizedTransaction = Pick<Transaction, 'hash' | 'fee' | 'time' | 'amount'>
-
+@inject()
 export class AddressesService {
+  constructor(protected blockCypherService: BlockCypherService) {}
+
   async getAll(): Promise<Address[]> {
     return Address.all()
   }
@@ -24,64 +28,90 @@ export class AddressesService {
 
   async sync(payload: Pick<Address, 'id'>): Promise<void> {
     const address = await Address.findOrFail(payload.id)
-    const transactions = await this.fetchAddressTransactions(address)
-    await Transaction.createMany(transactions)
+    const transactionsToSync = await this.fetchTransactionsToSync(address)
+    await Transaction.createMany(transactionsToSync)
   }
 
-  private async fetchAddressTransactions(address: Address): Promise<SynchronizedTransaction[]> {
+  private async fetchTransactionsToSync(address: Address): Promise<TransactionInsertDTO[]> {
+    const transactionsFromApi =
+      await this.blockCypherService.fetchTransactionsFromBlockCypher(address)
+    logger.info(`Fetched ${transactionsFromApi.length} transactions from ${address.hash}`)
+
+    const transactionsByHash = this.groupTransactionsByHash(transactionsFromApi)
+    logger.info(`Grouped ${Object.keys(transactionsByHash).length} transactions by hash`)
+
+    const transactionsWithTotalAmount = this.formatTransactionsByHashToTransactions(
+      transactionsByHash,
+      address
+    )
+
+    const transactionsToSync = await this.findTransactionsToSync(
+      transactionsWithTotalAmount,
+      address
+    )
+    logger.info(
+      `Found ${transactionsToSync.length} transactions to sync for address ${address.hash}`
+    )
+    return transactionsToSync
+  }
+
+  private async findTransactionsToSync(
+    transactionsWithTotalAmount: TransactionInsertDTO[],
+    address: Address
+  ) {
     const lastTransaction = await Transaction.query()
       .where('address_id', address.id)
       .orderBy('time', 'desc')
       .first()
-    const transactionsFromApi = await fetch(
-      `https://api.blockcypher.com/v1/btc/main/addrs/${address.hash}/full`
-    )
-    if (!transactionsFromApi.ok) {
-      throw new Error(`Error fetching transactions: ${transactionsFromApi.statusText}`)
-    }
-    const json = (await transactionsFromApi.json()) as { txs: any[] }
-    const rawTransactions = json.txs
-    // logger.info({ rawTransactions })
-    const transactions: SynchronizedTransaction[] = []
-    for (const transaction of rawTransactions) {
-      let sent = 0
-      let received = 0
-
-      // Check inputs, ie sent tokens
-      transaction.inputs.forEach((input) => {
-        if (input.addresses?.includes(address.hash)) {
-          sent += input.output_value
-        }
-      })
-
-      // Check outputs, ie received tokens
-      transaction.outputs.forEach((output) => {
-        if (output.addresses?.includes(address.hash)) {
-          received += output.value
-        }
-      })
-
+    const transactionsToSync: TransactionInsertDTO[] = []
+    for (const transaction of transactionsWithTotalAmount) {
       if (lastTransaction && transaction.hash === lastTransaction.hash) {
+        logger.info(`Transaction ${transaction.hash} already synced. Stopping sync`)
         break
       }
-      const amount = received - sent
-      transactions.push(this.formatRawTransaction({ ...transaction, amount }, address))
+      transactionsToSync.push(transaction)
     }
-    logger.info(`Fetched ${transactions.length} transactions from ${address.hash}`)
-    return transactions
+    return transactionsToSync
   }
 
-  private formatRawTransaction(
-    transaction: { hash: string; fees: number; confirmed: string; amount: number },
+  private groupTransactionsByHash(transactions: BlockCypherTransaction[]) {
+    return transactions.reduce(
+      (acc, transaction) => {
+        if (!acc[transaction.tx_hash]) {
+          acc[transaction.tx_hash] = []
+        }
+        acc[transaction.tx_hash].push(transaction)
+        return acc
+      },
+      {} as Record<BlockCypherTransaction['tx_hash'], BlockCypherTransaction[]>
+    )
+  }
+
+  private formatTransactionsByHashToTransactions(
+    transactionsByHash: Record<string, BlockCypherTransaction[]>,
     address: Address
-  ): SynchronizedTransaction & { address_id: AddressUuid } {
+  ) {
+    return Object.values(transactionsByHash).map((_transactions) => {
+      const totalAmount = _transactions.reduce(
+        (acc: number, tx: BlockCypherTransaction) => acc + (tx.spent ? -tx.value : tx.value),
+        0
+      )
+      return {
+        amount: totalAmount,
+        ...this.transformBlockCypherTransactionToTransaction(_transactions[0], address),
+      }
+    })
+  }
+
+  private transformBlockCypherTransactionToTransaction(
+    transaction: BlockCypherTransaction,
+    address: Address
+  ): Pick<Transaction, 'hash' | 'time' | 'addressId'> {
     const transactionDateTime = DateTime.fromISO(transaction.confirmed)
     return {
-      hash: transaction.hash,
-      fee: transaction.fees,
+      hash: transaction.tx_hash,
       time: transactionDateTime,
-      amount: transaction.amount,
-      address_id: address.id,
+      addressId: address.id,
     }
   }
 }

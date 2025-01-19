@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
+export type TransactionInsertDTO = Pick<Transaction, 'addressId' | 'hash' | 'amount'>
+
 export default class Transaction extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
@@ -13,9 +15,6 @@ export default class Transaction extends BaseModel {
 
   @column()
   declare amount: number
-
-  @column()
-  declare fee: number
 
   @column.dateTime()
   declare time: DateTime
