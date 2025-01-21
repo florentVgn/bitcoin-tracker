@@ -1,5 +1,7 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column } from '@adonisjs/lucid/orm'
+import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
+import Address from '#models/address'
+import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 
 export type TransactionInsertDTO = Pick<Transaction, 'addressId' | 'hash' | 'amount'>
 
@@ -9,6 +11,9 @@ export default class Transaction extends BaseModel {
 
   @column()
   declare addressId: string
+
+  @belongsTo(() => Address)
+  declare address: BelongsTo<typeof Address>
 
   @column()
   declare hash: string

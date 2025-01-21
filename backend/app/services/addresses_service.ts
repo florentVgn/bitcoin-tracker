@@ -15,6 +15,10 @@ export class AddressesService {
     return Address.all()
   }
 
+  async get({ id }: { id: AddressUuid }): Promise<Address> {
+    return Address.query().where('addresses.id', id).firstOrFail()
+  }
+
   async create({ hash }: Pick<Address, 'hash'>): Promise<AddressUuid> {
     const existingAddress = await Address.findBy('hash', hash)
     if (existingAddress) {
