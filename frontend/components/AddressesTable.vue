@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Address } from '~/models/Address';
+import type { Address } from '~/models/address';
 
 const emit = defineEmits(['sync']);
 
@@ -25,9 +25,11 @@ const emitSync = (event: Address) => {
 <template>
   <UTable :rows="props.addresses" :columns="columns">
     <template #action-data='{ row }'>
-      <UButton variant="ghost" @click="emitSync(row)">
-        Sync
-      </UButton>
+      <NuxtLink :to="`/addresses/${row.id}`">
+        <UButton variant="ghost" @click="emitSync(row)">
+          Voir
+        </UButton>
+      </NuxtLink>
     </template>
   </UTable>
 </template>

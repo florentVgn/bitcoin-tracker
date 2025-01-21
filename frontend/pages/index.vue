@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useToast } from '#imports';
-import type { Address } from '~/models/Address';
+import type { Address } from '~/models/address';
 
 const { $api } = useNuxtApp();
 const addresses = ref<Address[]>([]);
@@ -41,9 +41,7 @@ async function syncAddress(event: Pick<Address, 'id'>) {
 
 <template>
   <UContainer class="flex flex-col gap-4 py-10">
-    <NewAddressForm @addressAdded="fetchAddresses"></NewAddressForm>
-
-    <h2>Addresses list</h2>
+    <h1 class="text-2xl text">Addresses list</h1>
     <AddressesTable :addresses="addresses" @sync="syncAddress"></AddressesTable>
   </UContainer>
   <UNotifications />

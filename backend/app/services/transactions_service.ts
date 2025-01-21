@@ -4,7 +4,7 @@ import { AddressUuid } from '#models/address'
 export class TransactionsService {
   async getAll({
     addressId,
-    limit = 2,
+    limit = 20,
     offset = 0,
   }: {
     addressId: AddressUuid
