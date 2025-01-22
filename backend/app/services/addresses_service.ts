@@ -7,6 +7,10 @@ import { BlockCypherService } from '#services/block_cypher/block_cypher_service'
 import { inject } from '@adonisjs/core'
 import { BlockCypherTransaction } from '#services/block_cypher/block_cypher_model'
 
+interface GetAddressResult extends Pick<Address, 'id' | 'hash' | 'createdAt' | 'updatedAt'> {
+  addressBalance: number
+}
+
 @inject()
 export class AddressesService {
   constructor(protected blockCypherService: BlockCypherService) {}
@@ -15,8 +19,18 @@ export class AddressesService {
     return Address.all()
   }
 
-  async get({ id }: { id: AddressUuid }): Promise<Address> {
-    return Address.query().where('addresses.id', id).firstOrFail()
+  async get({ id }: { id: AddressUuid }): Promise<GetAddressResult> {
+    const address = await Address.query()
+      .where('id', id)
+      .withAggregate('transactions', (query) => {
+        query.sum('amount').as('addressBalance')
+      })
+      .firstOrFail()
+
+    return {
+      ...(address.serialize() as Pick<Address, 'id' | 'hash' | 'createdAt' | 'updatedAt'>),
+      addressBalance: Number(address.$extras.addressBalance),
+    }
   }
 
   async create({ hash }: Pick<Address, 'hash'>): Promise<AddressUuid> {
