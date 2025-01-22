@@ -7,7 +7,6 @@ import {
   createAddressValidator,
   getAddressValidator,
   getAddressTransactionsValidator,
-  syncAddressValidator,
 } from '#validators/address'
 import { TransactionsService } from '#services/transactions_service'
 
@@ -34,8 +33,9 @@ export default class AddressesController {
     const transactions = await this.transactionsService.getAll({
       addressId: payload.params.id,
       limit: payload.params.limit,
-      offset: payload.params.offset,
+      page: payload.params.page,
     })
+
     response.send({ transactions })
   }
 
@@ -43,11 +43,5 @@ export default class AddressesController {
     const payload = await request.validateUsing(createAddressValidator)
     const id = await this.addressesService.create(payload)
     response.send({ id })
-  }
-
-  async sync({ request, response }: HttpContext): Promise<void> {
-    const payload = await request.validateUsing(syncAddressValidator)
-    await this.addressesService.sync({ id: payload.params.id })
-    response.send({ message: 'Synchronization completed successfully' })
   }
 }

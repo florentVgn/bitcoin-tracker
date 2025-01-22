@@ -6,14 +6,6 @@ export const createAddressValidator = vine.compile(
   })
 )
 
-export const syncAddressValidator = vine.compile(
-  vine.object({
-    params: vine.object({
-      id: vine.string().uuid(),
-    }),
-  })
-)
-
 export const getAddressValidator = vine.compile(
   vine.object({
     params: vine.object({
@@ -27,7 +19,7 @@ export const getAddressTransactionsValidator = vine.compile(
     params: vine.object({
       id: vine.string().uuid(),
       limit: vine.number().min(1).max(200).optional(),
-      offset: vine.number().optional(),
+      page: vine.number().min(1).optional(),
     }),
   })
 )
