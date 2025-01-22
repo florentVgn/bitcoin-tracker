@@ -32,8 +32,8 @@ export default class AddressesController {
     const payload = await request.validateUsing(getAddressTransactionsValidator)
     const transactions = await this.transactionsService.getAll({
       addressId: payload.params.id,
-      limit: payload.params.limit,
-      page: payload.params.page,
+      limit: payload.limit,
+      page: payload.page,
     })
 
     response.send({ transactions })

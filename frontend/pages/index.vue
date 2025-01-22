@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useToast } from '#imports';
-import type { Address } from '~/models/address';
+import type { AddressDto } from '~/models/address';
+import type { Address } from 'node:cluster';
 
 const { $api } = useNuxtApp();
-const addresses = ref<Address[]>([]);
+const addresses = ref<AddressDto[]>([]);
 addresses.value = [];
 const toast = useToast();
 
@@ -11,7 +12,7 @@ async function fetchAddresses() {
   try {
     const response = await $api('/addresses/', {
       method: 'GET'
-    }) as { addresses: Address[] };
+    }) as { addresses: AddressDto[] };
     addresses.value = response.addresses.map((address) => ({
       id: address.id,
       hash: address.hash,

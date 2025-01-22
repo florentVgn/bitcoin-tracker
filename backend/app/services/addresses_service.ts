@@ -9,6 +9,7 @@ import { BlockCypherTransaction } from '#services/block_cypher/block_cypher_mode
 
 interface AddressDto extends Pick<Address, 'id' | 'hash' | 'createdAt' | 'updatedAt'> {
   addressBalance: number
+  transactionsCount: number
 }
 
 @inject()
@@ -16,9 +17,13 @@ export class AddressesService {
   constructor(protected blockCypherService: BlockCypherService) {}
 
   async getAll(): Promise<AddressDto[]> {
-    const addresses = await Address.query().withAggregate('transactions', (query) => {
-      query.sum('amount').as('addressBalance')
-    })
+    const addresses = await Address.query()
+      .withAggregate('transactions', (query) => {
+        query.sum('amount').as('addressBalance')
+      })
+      .withAggregate('transactions', (query) => {
+        query.count('id').as('transactionsCount')
+      })
     return addresses.map((address) => this.transformModelWithBalanceToDto(address))
   }
 
@@ -27,6 +32,9 @@ export class AddressesService {
       .where('id', id)
       .withAggregate('transactions', (query) => {
         query.sum('amount').as('addressBalance')
+      })
+      .withAggregate('transactions', (query) => {
+        query.count('id').as('transactionsCount')
       })
       .firstOrFail()
 
@@ -37,6 +45,7 @@ export class AddressesService {
     return {
       ...address.serialize(),
       addressBalance: Number(address.$extras.addressBalance),
+      transactionsCount: Number(address.$extras.transactionsCount),
     } as AddressDto
   }
 

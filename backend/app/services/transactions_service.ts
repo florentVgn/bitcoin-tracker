@@ -14,11 +14,13 @@ export class TransactionsService {
     limit?: number | undefined
     page?: number | undefined
   }): Promise<TransactionDto[]> {
-    const result = await Transaction.query()
+    const paginatedTransactions = await Transaction.query()
       .where('addressId', addressId)
+      .orderBy('time', 'desc')
       .limit(limit)
       .paginate(page)
-    const transactions = result.serialize().data as TransactionDto[]
+    console.log({ page })
+    const transactions = paginatedTransactions.serialize().data as TransactionDto[]
     return transactions
   }
 }

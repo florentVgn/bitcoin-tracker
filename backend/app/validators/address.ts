@@ -18,8 +18,8 @@ export const getAddressTransactionsValidator = vine.compile(
   vine.object({
     params: vine.object({
       id: vine.string().uuid(),
-      limit: vine.number().min(1).max(200).optional(),
-      page: vine.number().min(1).optional(),
     }),
+    limit: vine.number().min(1).max(200).optional(),
+    page: vine.number().min(1).optional(),
   })
 )
