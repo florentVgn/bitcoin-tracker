@@ -12,6 +12,6 @@ const AddressesController = () => import('#controllers/addresses_controller')
 
 router.get('/addresses', [AddressesController, 'index'])
 router.post('/addresses', [AddressesController, 'store'])
-router.get('/addresses/:id', [AddressesController, 'get'])
+router.get('/addresses/:id', [AddressesController, 'show'])
 router.get('/addresses/:id/transactions', [AddressesController, 'getTransactions'])
 router.post('/addresses/:id/sync', [AddressesController, 'sync'])

@@ -23,7 +23,7 @@ export default class AddressesController {
     response.send({ addresses })
   }
 
-  async get({ request, response }: HttpContext): Promise<void> {
+  async show({ request, response }: HttpContext): Promise<void> {
     const payload = await request.validateUsing(getAddressValidator)
     const address = await this.addressesService.get({ id: payload.params.id })
     response.send({ address })

@@ -7,7 +7,7 @@ import { BlockCypherService } from '#services/block_cypher/block_cypher_service'
 import { inject } from '@adonisjs/core'
 import { BlockCypherTransaction } from '#services/block_cypher/block_cypher_model'
 
-interface GetAddressResult extends Pick<Address, 'id' | 'hash' | 'createdAt' | 'updatedAt'> {
+interface AddressDto extends Pick<Address, 'id' | 'hash' | 'createdAt' | 'updatedAt'> {
   addressBalance: number
 }
 
@@ -15,11 +15,14 @@ interface GetAddressResult extends Pick<Address, 'id' | 'hash' | 'createdAt' | '
 export class AddressesService {
   constructor(protected blockCypherService: BlockCypherService) {}
 
-  async getAll(): Promise<Address[]> {
-    return Address.all()
+  async getAll(): Promise<AddressDto[]> {
+    const addresses = await Address.query().withAggregate('transactions', (query) => {
+      query.sum('amount').as('addressBalance')
+    })
+    return addresses.map((address) => this.transformModelWithBalanceToDto(address))
   }
 
-  async get({ id }: { id: AddressUuid }): Promise<GetAddressResult> {
+  async get({ id }: { id: AddressUuid }): Promise<AddressDto> {
     const address = await Address.query()
       .where('id', id)
       .withAggregate('transactions', (query) => {
@@ -27,10 +30,14 @@ export class AddressesService {
       })
       .firstOrFail()
 
+    return this.transformModelWithBalanceToDto(address)
+  }
+
+  private transformModelWithBalanceToDto(address: Address): AddressDto {
     return {
-      ...(address.serialize() as Pick<Address, 'id' | 'hash' | 'createdAt' | 'updatedAt'>),
+      ...address.serialize(),
       addressBalance: Number(address.$extras.addressBalance),
-    }
+    } as AddressDto
   }
 
   async create({ hash }: Pick<Address, 'hash'>): Promise<AddressUuid> {
