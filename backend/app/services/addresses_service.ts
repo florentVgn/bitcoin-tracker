@@ -63,48 +63,67 @@ export class AddressesService {
   async sync(payload: Pick<Address, 'id'>): Promise<void> {
     const address = await Address.findOrFail(payload.id)
     const transactionsToSync = await this.fetchTransactionsToSync(address)
+    const obj = transactionsToSync.reduce(
+      (acc, transaction) => {
+        if (!acc[transaction.hash]) acc[transaction.hash] = 0
+        acc[transaction.hash]++
+        return acc
+      },
+      {} as { [hash in string]: number }
+    )
+    console.log(`Sync sync: ${JSON.stringify(obj)}`)
+    Object.entries(obj).forEach(([key, value]) => {
+      if (value > 1) console.warn(`${key}: ${value}`)
+    })
     await Transaction.createMany(transactionsToSync)
   }
 
   private async fetchTransactionsToSync(address: Address): Promise<TransactionInsertDTO[]> {
-    const transactionsFromApi =
-      await this.blockCypherService.fetchTransactionsFromBlockCypher(address)
-    logger.info(`Fetched ${transactionsFromApi.length} transactions from ${address.hash}`)
-
-    const transactionsByHash = this.groupTransactionsByHash(transactionsFromApi)
-    logger.info(`Grouped ${Object.keys(transactionsByHash).length} transactions by hash`)
-
-    const transactionsWithTotalAmount = this.formatTransactionsByHashToTransactions(
-      transactionsByHash,
-      address
-    )
-
-    const transactionsToSync = await this.findTransactionsToSync(
-      transactionsWithTotalAmount,
-      address
-    )
-    logger.info(
-      `Found ${transactionsToSync.length} transactions to sync for address ${address.hash}`
-    )
-    return transactionsToSync
-  }
-
-  private async findTransactionsToSync(
-    transactionsWithTotalAmount: TransactionInsertDTO[],
-    address: Address
-  ) {
+    let lastBlockHeight: number | null = null
     const lastTransaction = await Transaction.query()
       .where('address_id', address.id)
       .orderBy('time', 'desc')
       .first()
     const transactionsToSync: TransactionInsertDTO[] = []
-    for (const transaction of transactionsWithTotalAmount) {
-      if (lastTransaction && transaction.hash === lastTransaction.hash) {
-        logger.info(`Transaction ${transaction.hash} already synced. Stopping sync`)
-        break
+    let lastTransactionFound = false
+
+    let iterations = 0
+
+    while (!lastTransactionFound && iterations < 2) {
+      iterations++
+      const url = `https://api.blockcypher.com/v1/btc/main/addrs/${address.hash}?limit=2000${lastBlockHeight ? `&before=${lastBlockHeight - 1}` : ''}`
+      const transactionsFromApi = await this.blockCypherService.fetchWithRetry({ url })
+
+      console.log(transactionsFromApi.length)
+      if (!transactionsFromApi.length) break
+
+      const transactionsByHash = this.groupTransactionsByHash(transactionsFromApi)
+
+      for (const [hash, transactions] of Object.entries(transactionsByHash)) {
+        if (lastTransaction && hash === lastTransaction.hash) {
+          lastTransactionFound = true
+          logger.info(`Transaction ${hash} already synced. Stopping sync`)
+          break
+        }
+        const totalAmount = transactions.reduce(
+          (acc: number, tx: BlockCypherTransaction) => acc + (tx.spent ? -tx.value : tx.value),
+          0
+        )
+        const transactionDateTime = DateTime.fromISO(transactions[0].confirmed)
+
+        lastBlockHeight = transactions[0].block_height
+        transactionsToSync.push({
+          amount: totalAmount,
+          hash,
+          time: transactionDateTime,
+          addressId: address.id,
+        })
       }
-      transactionsToSync.push(transaction)
     }
+
+    logger.info(
+      `Found ${transactionsToSync.length} transactions to sync for address ${address.hash}`
+    )
     return transactionsToSync
   }
 
@@ -119,33 +138,5 @@ export class AddressesService {
       },
       {} as Record<BlockCypherTransaction['tx_hash'], BlockCypherTransaction[]>
     )
-  }
-
-  private formatTransactionsByHashToTransactions(
-    transactionsByHash: Record<string, BlockCypherTransaction[]>,
-    address: Address
-  ) {
-    return Object.values(transactionsByHash).map((_transactions) => {
-      const totalAmount = _transactions.reduce(
-        (acc: number, tx: BlockCypherTransaction) => acc + (tx.spent ? -tx.value : tx.value),
-        0
-      )
-      return {
-        amount: totalAmount,
-        ...this.transformBlockCypherTransactionToTransaction(_transactions[0], address),
-      }
-    })
-  }
-
-  private transformBlockCypherTransactionToTransaction(
-    transaction: BlockCypherTransaction,
-    address: Address
-  ): Pick<Transaction, 'hash' | 'time' | 'addressId'> {
-    const transactionDateTime = DateTime.fromISO(transaction.confirmed)
-    return {
-      hash: transaction.tx_hash,
-      time: transactionDateTime,
-      addressId: address.id,
-    }
   }
 }
